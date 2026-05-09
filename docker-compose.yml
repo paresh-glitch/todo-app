@@ -1,0 +1,56 @@
+# ── docker-compose.yml ───────────────────────
+#
+# Use this to test everything LOCALLY before pushing to ECR/ECS.
+#
+# Commands:
+#   docker compose up --build     → build and start all containers
+#   docker compose down           → stop and remove containers
+#   docker compose logs backend   → see backend logs
+#
+# Once running, open: http://localhost:3000
+# ─────────────────────────────────────────────
+
+version: "3.8"
+
+services:
+
+  # ── MongoDB ─────────────────────────────────
+  mongodb:
+    image: mongo:6
+    container_name: todo-mongo
+    # Reduce memory usage (same trick as in ECS)
+    command: mongod --wiredTigerCacheSizeGB 0.25
+    volumes:
+      - mongo-data:/data/db  # persist data between restarts
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (Express API) ────────────────────
+  backend:
+    build: ./backend
+    container_name: todo-backend
+    environment:
+      # Connect to mongo service by service name (docker compose only!)
+      # In ECS (same task), we use 127.0.0.1 instead
+      MONGO_URI: mongodb://mongodb:27017/tododb
+      PORT: 5000
+    depends_on:
+      mongodb:
+        condition: service_healthy  # Wait for mongo to be ready
+
+  # ── Frontend (React + Nginx) ─────────────────
+  frontend:
+    build: ./frontend
+    container_name: todo-frontend
+    ports:
+      - "80:80"       # Visit http://localhost:3000
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:           # Named volume so data survives container restarts
