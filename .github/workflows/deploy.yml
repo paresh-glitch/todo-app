@@ -80,12 +80,12 @@ jobs:
           docker push ${{ secrets.ECR_REGISTRY }}/todo-app-frontend-${{ env.ENV }}:latest
           docker push ${{ secrets.ECR_REGISTRY }}/todo-app-frontend-${{ env.ENV }}:${{ github.sha }}
 
-     - name: build and push backend
-       run: |
-         docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:latest ./backend
-         docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:${{ github.sha }} ./backend
-         docker push ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:latest
-         docker push ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:${{ github.sha }}
+      - name: build and push backend
+        run: |
+          docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:latest ./backend
+          docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:${{ github.sha }} ./backend
+          docker push ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:latest
+          docker push ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
