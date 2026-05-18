@@ -1,0 +1,116 @@
+name: aws cicd
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: install dep
+        run: |
+          cd frontend
+          npm ci
+          npm run lint
+
+      - name: lint for backend
+        run: |
+          cd backend
+          npm ci
+          npm run lint
+
+  scan:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: scan for frontend
+        run: |
+          cd frontend
+          npm ci
+          npm audit --audit-level=critical
+
+      - name: scan for backend
+        run: |
+          cd backend
+          npm ci
+          npm audit --audit-level=high
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: aws login
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: login to ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        
+      - name: Set environment name
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "ENV=staging" >> $GITHUB_ENV
+          else
+            echo "ENV=prod" >> $GITHUB_ENV
+          fi
+
+      - name: build and push frontend
+        run: |
+          docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-frontend-${{ env.ENV}}:latest ./frontend
+          docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-frontend-${{ env.ENV }}:${{ github.sha }} ./frontend
+          docker push ${{ secrets.ECR_REGISTRY }}/todo-app-frontend-${{ env.ENV }}:latest
+          docker push ${{ secrets.ECR_REGISTRY }}/todo-app-frontend-${{ env.ENV }}:${{ github.sha }}
+
+     - name: build and push backend
+       run: |
+         docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:latest ./backend
+         docker build -t ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:${{ github.sha }} ./backend
+         docker push ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:latest
+         docker push ${{ secrets.ECR_REGISTRY }}/todo-app-backend-${{ env.ENV }}:${{ github.sha }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: aws login
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secret.AWS.REGION }}
+
+      - name: set env name
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "ENV=staging" >> $GITHUB_ENV
+          else
+            echo "ENV=prod" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ENV }}-cluster \
+            --service todo-app-backend-${{ env.ENV }}-service \
+            --force-new-deployment
