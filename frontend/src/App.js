@@ -335,7 +335,7 @@ export default function App() {
         <div className="header">
           <div className="header-top">
             <h1>do<span className="accent">.</span></h1>
-            <span className="subtitle">// cicd with aws github</span>
+            <span className="subtitle">// cicd with aws github now with alb</span>
           </div>
           <div className="stats">
             <div className="stat">
